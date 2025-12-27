@@ -1,120 +1,97 @@
 #include <iostream>
 #include <fstream>
-#include <string>
 #include <vector>
-#include <iomanip>
+#include <string>
 #include <cmath>
-#include <sstream>
+
 using namespace std;
-class TrajetoryLoger {
+
+class TrajectoryLogger {
 private:
-    string filename;
-    struct TrajectoryPoint
-    {
-        double x, y, z;
-        double speed;
-        double time;
-
-        TrajectoryPoint(double x, double y, double z, double speed, double time)
-            : x(x), y(y), z(z), speed(speed), time(time) {
-        }
+    struct Point {
+        double x, y, z, speed, time;
     };
-    vector<TrajectoryPoint> points;
-public:
-    TrajetoryLoger(const string& filename) : filename(filename) {}
-    void addPoint(double x, double y, double z, double speed, double time) {
-        points.emplace_back(x, y, z, speed, time);
-    }
-    bool savetoCSV() {
-        ofstream fout(filename);
-        if (!fout.is_open())
-            runtime_error("Ошибка при открытии файла!");
-        fout << fixed << setw(5) << "time\t"
-            << setw(5) << "x\t" << setw(5) << "y\t" << setw(5) << "z\t" << setw(5) << "speed\n";
-        for (int i = 0; i < points.size(); i++) {
-            fout << fixed << setw(5) << setprecision(2) << points[i].time << '\t'
-                << points[i].x << '\t'
-                << points[i].y << '\t'
-                << points[i].z << '\t'
-                << points[i].speed << '\n';
-        }
-        fout.close();
-        if (!fout.good()) {
-            runtime_error("Ошибка закрытия файла!");
-            return false;
-        }
-        else
-            return true;
-    }
-    bool loadFromCSV() {
-        vector <double> values;
-        double value;
-        ifstream fin(filename);
-        if (!fin.is_open()) {
-            runtime_error("Ошибка открытия файла!");
-            return false;
-        }
-        string line;
-        int i = 0;
-        getline(fin, line);
-        while (getline(fin, line)) {
-            stringstream ss(line);
-            while (ss >> value) {
-                values.push_back(value);
-            }
-            points[i].time = values[0];
-            points[i].x = values[1];
-            points[i].y = values[2];
-            points[i].z = values[3];
-            points[i].speed = values[4];
-            i++;
-            cout << values[0] << "\t" << values[1] << "\t" << values[2] << "\t" << values[3] << "\t" << values[4] << '\n';
-            values.clear();
+    vector<Point> points;
+    string filename;
 
+public:
+    TrajectoryLogger(const string& filename) : filename(filename) {}
+
+    void addPoint(double x, double y, double z, double speed, double time) {
+        points.push_back({ x, y, z, speed, time });
+    }
+
+    bool saveToCSV() {
+        ofstream file(filename);
+        if (!file.is_open()) {
+            return false;
         }
-        fin.close();
+
+        file << "time,x,y,z,speed\n";
+        for (const auto& p : points) {
+            file << p.time << "," << p.x << "," << p.y << "," << p.z << "," << p.speed << "\n";
+        }
+
+        file.close();
         return true;
     }
+
+    bool loadFromCSV() {
+        points.clear();
+        ifstream file(filename);
+        if (!file.is_open()) {
+            return false;
+        }
+
+        string header;
+        getline(file, header);
+
+        double time, x, y, z, speed;
+        char comma;
+        while (file >> time >> comma >> x >> comma >> y >> comma >> z >> comma >> speed) {
+            points.push_back({ x, y, z, speed, time });
+        }
+
+        file.close();
+        return true;
+    }
+
     double calculateTotalDistance() {
-        double TotalDistance = 0;
-        for (int num_point = 0; num_point < points.size(); num_point++) {
-            if (num_point + 1 >= points.size()) {
-                return TotalDistance;
-            }
-            double base = pow(points[num_point + 1].x - points[num_point].x, 2) + pow(points[num_point + 1].y - points[num_point].y, 2) + pow(points[num_point + 1].z - points[num_point].z, 2);
-            TotalDistance += pow(base, 0.5);
+        double total = 0.0;
+        for (size_t i = 1; i < points.size(); ++i) {
+            double dx = points[i].x - points[i - 1].x;
+            double dy = points[i].y - points[i - 1].y;
+            double dz = points[i].z - points[i - 1].z;
+            total += sqrt(dx * dx + dy * dy + dz * dz);
         }
-        return TotalDistance;
+        return total;
     }
+
     double findMaxSpeed() {
-        double max_speed = points[0].speed;
-        for (int num_point = 0; num_point < points.size(); num_point++) {
-            if (points[num_point].speed > max_speed)
-                max_speed = points[num_point].speed;
+        double maxSpeed = 0.0;
+        for (const auto& p : points) {
+            if (p.speed > maxSpeed) {
+                maxSpeed = p.speed;
+            }
         }
-        return max_speed;
+        return maxSpeed;
     }
+
     void printStatistics() {
-        cout << "Показатели траектории\n";
-        cout << fixed << setw(5) << "time\t"
-            << setw(5) << "x\t" << setw(5) << "y\t" << setw(5) << "z\t" << setw(5) << "speed\n";
-        for (int i = 0; i < points.size(); i++) {
-            cout << fixed << setw(5) << setprecision(2) << points[i].time << '\t'
-                << points[i].x << '\t'
-                << points[i].y << '\t'
-                << points[i].z << '\t'
-                << points[i].speed << '\n';
-        }
-        cout << "Максимальная скорость: " << findMaxSpeed() << "\n";
-        cout << "Итоговое расстояние: " << calculateTotalDistance() << "\n";
+        cout << "Total distance: " << calculateTotalDistance() << "\n";
+        cout << "Max speed: " << findMaxSpeed() << "\n";
     }
 };
+
 int main() {
-    TrajetoryLoger log("data_flight.txt");
-    log.addPoint(1, 6, 8, 41, 0);
-    log.addPoint(2, 2, 1, 53, 1);
-    log.savetoCSV();
-    log.loadFromCSV();
-    log.printStatistics();
+    TrajectoryLogger logger("trajectory.csv");
+
+    logger.addPoint(10.5, 20.3, 100.0, 25.0, 0.0);
+    logger.addPoint(15.2, 25.1, 105.0, 27.5, 1.5);
+    logger.addPoint(20.8, 30.7, 110.0, 30.0, 3.0);
+
+    logger.saveToCSV();
+    logger.printStatistics();
+
     return 0;
 }
