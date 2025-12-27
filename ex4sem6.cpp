@@ -1,116 +1,287 @@
 #include <iostream>
-#include <vector>
 #include <fstream>
-#include <string>
 #include <sstream>
+#include <vector>
 #include <cmath>
+#include <iomanip>
+#include <string>
+#include <algorithm>
+using namespace std;
+
+struct Waypoint {
+    int id;
+    double x, y, z;
+    double speed;
+    string description;
+    bool reached;
+
+    Waypoint(int id = 0, double x = 0.0, double y = 0.0, double z = 0.0,
+            double speed = 0.0, const string& desc = "", bool reached = false)
+        : id(id), x(x), y(y), z(z), speed(speed),
+          description(desc), reached(reached) {}
+};
+
 class WaypointManager {
 private:
-    struct Point
-    {
-        int id;
-        double x, y, z;
-        double speed;
-        std::string description;
-    };
-    Point current_waypoint;
-    std::vector <Point> points;
+    vector<Waypoint> waypoints;
+    string filename;
+    int currentWaypointIndex;
+
+    double calculateDistance(const Waypoint& a, const Waypoint& b) const {
+        double dx = b.x - a.x;
+        double dy = b.y - a.y;
+        double dz = b.z - a.z;
+        return sqrt(dx*dx + dy*dy + dz*dz);
+    }
+
 public:
-    void addWaypoint(int id, double x, double y, double z, double speed, const std::string& desc) {
-        points.push_back({ id, x, y, z, speed, desc });
-        if (points.size() == 1) {
-            current_waypoint = { points[0] };
+    WaypointManager(const string& filename = "waypoints.txt")
+        : filename(filename), currentWaypointIndex(0) {}
+
+    void addWaypoint(int id, double x, double y, double z,
+                    double speed, const string& desc) {
+        for (const auto& wp : waypoints) {
+            if (wp.id == id) {
+                cout << "Точка маршрута с ID " << id << " уже существует!" << endl;
+                return;
+            }
         }
-        std::cout << "Точка " << id << " добавлена в маршрут." << std::endl;
+
+        waypoints.emplace_back(id, x, y, z, speed, desc, false);
+        cout << "Точка маршрута '" << desc << "' (ID: " << id << ") добавлена." << endl;
     }
 
     bool saveRoute() {
-        std::ofstream fout("waypoints.txt");
+        ofstream fout(filename);
         if (!fout.is_open()) {
-            std::runtime_error("Ошибка открытия файла!");
-            return true;
-        }
-        for (int i = 0; i < points.size(); i++) {
-            fout << points[i].id << "," << points[i].x << "," << points[i].y << "," << points[i].z << "," << points[i].speed << ","
-                << points[i].description << "\n";
-        }
-        std::cout << "Точки успешно записаны в файл!\n";
-        fout.close();
-
-        return true;
-    }
-    bool loadRoute() {
-        std::ifstream fin("waypoints.txt");
-        if (!fin.is_open()) {
-            std::runtime_error("Ошибка при открытии файла!");
+            cerr << "Ошибка открытия файла для записи: " << filename << endl;
             return false;
         }
-        std::string value;
-        std::string line;
-        int i = 0;
-        while (std::getline(fin, line)) {
-            std::stringstream ss(line);
-            std::getline(ss, value, ','); points[i].id = std::stod(value);
-            std::getline(ss, value, ','); points[i].x = std::stod(value);
-            std::getline(ss, value, ','); points[i].y = std::stod(value);
-            std::getline(ss, value, ','); points[i].z = std::stod(value);
-            std::getline(ss, value, ','); points[i].speed = std::stod(value);
-            std::getline(ss, value, ','); points[i].description = value;
-            std::cout << "Загруженые данные\n";
-            std::cout << "ID: " << points[i].id << "\tX: " << points[i].x << "\tY: " << points[i].y << "\tZ: " << points[i].z
-                << "\tSpeed: " << points[i].speed << "\tDescription: " << points[i].description << "\n";
-            i++;
+
+        for (const auto& wp : waypoints) {
+            fout << wp.id << ","
+                 << fixed << setprecision(2)
+                 << wp.x << ","
+                 << wp.y << ","
+                 << wp.z << ","
+                 << wp.speed << ","
+                 << wp.description << "\n";
         }
-        fin.close();
-        std::cout << "Маршрут загружен: " << i << " точек\n";
+
+        fout.close();
+        cout << "Маршрут сохранен в файл: " << filename << endl;
         return true;
     }
-    double CalculateTotalDistance() {
-        double TotalDistance;
-        for (int i = 0; i < points.size() - 1; i++) {
-            double square_x = std::pow(points[i].x - points[i + 1].x, 2);
-            double square_y = std::pow(points[i].y - points[i + 1].y, 2);
-            double square_z = std::pow(points[i].z - points[i + 1].z, 2);
-            TotalDistance += std::pow(square_x + square_y + square_z, 0.5);
+
+    bool loadRoute() {
+        ifstream fin(filename);
+        if (!fin.is_open()) {
+            cerr << "Ошибка открытия файла для чтения: " << filename << endl;
+            return false;
         }
-        if (TotalDistance == 0) {
-            std::cout << "Невозможно рассчитать расстояние, не хватает точек!";
-            return TotalDistance;
-        }
-        std::cout << "Общее расстояние: " << TotalDistance << " метров\n";
-        return TotalDistance;
-    }
-    Point getCurrentWaypoint() {
-        return current_waypoint;
-    }
-    Point getNextWaypoint() {
-        for (int i = 0; i < points.size(); i++) {
-            std::cout << "Текущая точка: " << current_waypoint.description << "( " << current_waypoint.x << ", " << current_waypoint.y
-                << ", " << current_waypoint.z << ")\n";
-            if (current_waypoint.id == points[i].id) {
-                if (i == points.size()) {
-                    std::cout << "Следующая точка: " << points[i].description << "( " << points[i].x << ", " << points[i].y
-                        << ", " << points[i].z << ")\n";
-                    return points[i];
+
+        waypoints.clear();
+        currentWaypointIndex = 0;
+        string line;
+        int loadedCount = 0;
+
+        while (getline(fin, line)) {
+            if (line.empty()) continue;
+
+            stringstream ss(line);
+            string token;
+            vector<string> tokens;
+
+            while (getline(ss, token, ',')) {
+                tokens.push_back(token);
+            }
+
+            if (tokens.size() == 6) {
+                try {
+                    int id = stoi(tokens[0]);
+                    double x = stod(tokens[1]);
+                    double y = stod(tokens[2]);
+                    double z = stod(tokens[3]);
+                    double speed = stod(tokens[4]);
+                    string desc = tokens[5];
+
+                    waypoints.emplace_back(id, x, y, z, speed, desc, false);
+                    loadedCount++;
+                } catch (const exception& e) {
+                    cerr << "Ошибка преобразования данных: " << line << endl;
                 }
-                else {
-                    std::cout << "Следующая точка: " << points[i + 1].description << "( " << points[i + 1].x << ", " << points[i + 1].y
-                        << ", " << points[i + 1].z << ")\n";
-                    return points[i + 1];
-                }
+            } else {
+                cerr << "Некорректная строка: " << line << endl;
             }
         }
-        return current_waypoint;
+
+        fin.close();
+        return loadedCount > 0;
+    }
+
+    double calculateTotalDistance() {
+        double totalDistance = 0.0;
+
+        for (size_t i = 1; i < waypoints.size(); ++i) {
+            totalDistance += calculateDistance(waypoints[i-1], waypoints[i]);
+        }
+
+        return totalDistance;
+    }
+
+    Waypoint getNextWaypoint() {
+        if (waypoints.empty()) {
+            return Waypoint(0, 0, 0, 0, 0, "Нет точек ");
+        }
+
+        for (size_t i = currentWaypointIndex; i < waypoints.size(); ++i) {
+            if (!waypoints[i].reached) {
+                currentWaypointIndex = i;
+                return waypoints[i];
+            }
+        }
+
+        return waypoints.back();
+    }
+
+    bool checkWaypointReached(double x, double y, double z) {
+        if (waypoints.empty() || currentWaypointIndex >= waypoints.size()) {
+            return false;
+        }
+
+        Waypoint& current = waypoints[currentWaypointIndex];
+
+        double distance = sqrt(pow(x - current.x, 2) +
+                              pow(y - current.y, 2) +
+                              pow(z - current.z, 2));
+
+        if (distance < 10.0 && !current.reached) {
+            current.reached = true;
+            cout << "Точка маршрута '" << current.description
+                 << "' достигнута!" << endl;
+
+            currentWaypointIndex++;
+            if (currentWaypointIndex >= waypoints.size()) {
+                cout << "Маршрут завершен!" << endl;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    void printRouteInfo() {
+        if (waypoints.empty()) {
+            cout << "Маршрут пуст." << endl;
+            return;
+        }
+
+        cout << "\nИнформация о маршруте" << endl;
+        cout << "Всего точек: " << waypoints.size() << endl;
+        cout << "Общее расстояние: " << fixed << setprecision(1)
+             << calculateTotalDistance() << " метров" << endl;
+
+        if (currentWaypointIndex < waypoints.size()) {
+            const auto& current = waypoints[currentWaypointIndex];
+            cout << "Текущая точка: " << current.description
+                 << " (" << fixed << setprecision(1)
+                 << current.x << ", " << current.y << ", " << current.z << ")" << endl;
+        }
+
+        if (currentWaypointIndex + 1 < waypoints.size()) {
+            const auto& next = waypoints[currentWaypointIndex + 1];
+            cout << "Следующая точка: " << next.description
+                 << " (" << fixed << setprecision(1)
+                 << next.x << ", " << next.y << ", " << next.z << ")" << endl;
+        } else if (currentWaypointIndex < waypoints.size()) {
+            const auto& current = waypoints[currentWaypointIndex];
+            if (!current.reached) {
+                cout << "Следующая точка: " << current.description
+                     << " (" << fixed << setprecision(1)
+                     << current.x << ", " << current.y << ", " << current.z << ")" << endl;
+            } else {
+                cout << "Маршрут завершен!" << endl;
+            }
+        }
+    }
+
+    void printAllWaypoints() {
+        if (waypoints.empty()) {
+            cout << "Нет точек маршрута." << endl;
+            return;
+        }
+
+        cout << "\ Все точки маршрута" << endl;
+        for (const auto& wp : waypoints) {
+            cout << "ID: " << wp.id
+                 << ", Описание: " << wp.description
+                 << ", Позиция: (" << fixed << setprecision(2)
+                 << wp.x << ", " << wp.y << ", " << wp.z << ")"
+                 << ", Скорость: " << wp.speed
+                 << ", Достигнута: " << (wp.reached ? "Да" : "Нет") << endl;
+        }
+    }
+
+    void resetRoute() {
+        for (auto& wp : waypoints) {
+            wp.reached = false;
+        }
+        currentWaypointIndex = 0;
+        cout << "Маршрут сброшен. Все точки отмечены как недостигнутые." << endl;
+    }
+    int getWaypointCount() const {
+        return waypoints.size();
+    }
+    int getCurrentIndex() const {
+        return currentWaypointIndex;
+    }
+    const vector<Waypoint>& getAllWaypoints() const {
+        return waypoints;
     }
 };
 
+void createInitialWaypointsFile() {
+    ofstream fout("waypoints.txt");
+    if (fout.is_open()) {
+        fout << "1,0.0,0.0,100.0,25.0,Start\n";
+        fout << "2,100.0,50.0,150.0,30.0,CheckpointA\n";
+        fout << "3,200.0,100.0,200.0,35.0,CheckpointB\n";
+        fout.close();
+    }
+}
+
 int main() {
-    WaypointManager way_man;
-    way_man.addWaypoint(1, 0.0, 0.0, 100.0, 25.0, "Start");
-    way_man.addWaypoint(2, 100.0, 50.0, 150.0, 30.0, "CheckpointA");
-    way_man.addWaypoint(3, 200.0, 100.0, 200.0, 35.0, "CheckpointB");
-    bool save = way_man.saveRoute();
-    bool load = way_man.loadRoute();
-    double total = way_man.CalculateTotalDistance();
-    way_man.getNextWaypoint();
+    createInitialWaypointsFile();
+    WaypointManager manager("waypoints.txt");
+    manager.loadRoute();
+    manager.printRouteInfo();
+    manager.printAllWaypoints();
+    cout << "\nДобавление новой точки " << endl;
+    manager.addWaypoint(4, 300.0, 150.0, 180.0, 40.0, "CheckpointC");
+    manager.saveRoute();
+    cout << "\nОбновление маршрута" << endl;
+    manager.loadRoute();
+    manager.printRouteInfo();
+    Waypoint next = manager.getNextWaypoint();
+    cout << "Следующая точка для достижения: " << next.description << endl;
+    cout << "\nПроверка достижения точек:" << endl;
+    cout << "Позиция (5.0, 5.0, 105.0) - близко к Start: ";
+    if (manager.checkWaypointReached(5.0, 5.0, 105.0)) {
+        cout << "Точка достигнута!" << endl;
+    } else {
+        cout << "Не достигнута" << endl;
+    }
+
+    manager.printRouteInfo();
+
+    cout << "\nДвижения по маршруту " << endl;
+    manager.resetRoute();
+    vector<tuple<double, double, double>> testPositions = {
+        {0.0, 0.0, 100.0},
+        {100.0, 50.0, 150.0},
+        {200.0, 100.0, 200.0}
+    };
+
+    return 0;
 }
